@@ -1,8 +1,7 @@
-
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
+#include "scanner.h"
 
 /*
 program → stmt list EOF
@@ -16,12 +15,6 @@ factor → ( expr ) | id | number
 add_op → + | -
 mult_op → * | /
 */
-typedef enum {read, write, assign, id, num, add, sub, mul, divi, lparen, rparen, eof} token;
-void error(){
-    printf("%s", "syntax error\n");
-    exit (1);
-}
-
 struct idList
 {
     char var[10];
@@ -29,39 +22,12 @@ struct idList
     struct idList *next;
 };
 
-char commands[] = "READ A\nB:= 2*A\nWRITE B+4";
-char currToken[25];
-token tokenType;
 struct idList *idListStart = NULL, *idListLast = NULL;
-int commandsInd = 0;
 size_t lineLen = 3;
-double finalValue = 0;
+char tempChar[10];
 
-void compare(token expectedToken){
-    if(tokenType == expectedToken ){
-        printf("%s", "The two token types are the same");
-    }
-    else error();
-}
-
-
-int inList(char* varName){
-    struct idList *checker = idListStart;
-    while (checker != idListLast){
-        if(strcmp(checker->var, varName) > 0){
-            return 1;
-        }
-        else{
-            checker = checker->next;
-        }
-    }
-    return 0;
-}
-
-
-token scan();
 void program();
-int stmt_list();
+void stmt_list();
 void stmt();
 double expr();
 double term_tail();
@@ -71,9 +37,29 @@ double factor();
 token add_op();
 token mul_op();
 
+void compare(token expectedToken){
+    if(tokenType == expectedToken ){
+        printf("%s", "The two token types are the same");
+    }
+    else error();
+}
+
+int inList(){
+    struct idList *checker = idListStart;
+    while (checker != idListLast){
+        if(strcmp(checker->var, tempChar) > 0){
+            return 1;
+        }
+        else{
+            checker = checker->next;
+        }
+    }
+    return 0;
+}
+
 void listAdd(){
     if(tokenType == id){
-        char response[10];
+        char *response;
         int responseLen = getline(&response, &lineLen, stdin);
         if(idListStart == NULL){
             idListStart = malloc(sizeof(struct idList));
@@ -84,7 +70,7 @@ void listAdd(){
             idListLast->next = malloc(sizeof(struct idList));
             idListLast = idListLast->next;
             strcpy(idListStart->var, currToken);
-            idListLast->value = strtod(response, response + responseLen);
+            idListLast->value = strtod(response, (char **) (response + responseLen));
         }
     }
     if(idListStart == NULL){
@@ -95,7 +81,7 @@ void listAdd(){
         idListLast->next = malloc(sizeof(struct idList));
         idListLast = idListLast->next;
         strcpy(idListStart->var, currToken);
-        idListLast->value = strtod(currToken, currToken + strlen(currToken));
+        idListLast->value = strtod(currToken, (char **) (currToken + strlen(currToken)));
     }
 }
 
@@ -128,7 +114,6 @@ int main() {
         printf("%i\n", i );
         *(allIn + i) = *(input + i);
     }
-
     while(strcmp( input, "$$\n") != 0) {
         printf("%s", input);
         printf("%i\n", strlen(input));
@@ -136,7 +121,6 @@ int main() {
         printf("%i\n", sizeof(input) );
         printf("%s", allIn);
         printf("%i\n", strlen(allIn));
-
         getline(&input, &lineLen, stdin);
         if(strcmp( input, "$$\n") != 0){
             realloc(allIn, sizeof(allIn) + sizeof(input));
@@ -146,8 +130,6 @@ int main() {
     free(input);
     printf("%s", allIn);
     printf("%i\n", strlen(allIn));
-
-
     char *token = NULL;
     int currToken = 0;
     while(strcmp(token, "$$") != 0){
@@ -158,53 +140,10 @@ int main() {
     return 0;
 }
 
-token scan(){
-    char currChar = ' ';
-    int index = 0;
-    while(isspace(currChar) > 0 ){
-        currChar = commands[++commandsInd];
-    }
-    if (currChar == EOF){
-        return  eof;
-    }
-    else if(isalpha(currChar) > 0) {
-        while (isalnum(currChar) > 0){
-            currToken[index] = currChar;
-            index++;
-            commandsInd++;
-            currChar = commands[commandsInd];
-        }
-        if(strcmp(currToken, "read") > 0){
-            return read;
-        }
-        else if(strcmp(currToken, "write") > 0){
-            return write;
-        }
-        else return id;
-    }
-    else if(isdigit(currChar) > 0){
-        while(isdigit(currChar) > 0){
-            currToken[index] = currChar;
-            index++;
-            currChar = commands[++commandsInd];
-        }
-        return num;
-    }
-    else switch (currChar) {
-            case '=': return assign;
-            case '+': return add;
-            case '-': return sub;
-            case '*': return mul;
-            case '/': return divi;
-            case '(': return rparen;
-            case ')': return lparen;
-            default: error();
-        }
 
-}
 
 void program(){
-    tokenType = scan();
+    scan();
     printf("%s", "Program Started...\n");
     if (tokenType == id || tokenType == read || tokenType == write) {
         stmt_list();
@@ -217,56 +156,69 @@ void program(){
     else error();
 }
 
-int stmt_list(){
-    stmt();
-    if(tokenType == eof){
-        printf("%s", "stmt_list complete");
-        return 1;
+void stmt_list(){
+    while(tokenType != eof){
+        stmt();
     }
-    stmt_list();
+    printf("%s", "stmt_list complete");
 }
 
 void stmt(){
     switch (tokenType) {
         case id:
-            if(inList(currToken) == 1){
+            printf("%s","Assignment Started...\n");
+            if(inList() == 1){
                 printf("%s", "That id has already been assigned a value");
                 exit(2);
             }
+            strcpy(tempChar, currToken);
+            scan();
             if(commands[commandsInd+1] == '='){
-                printf("%s","Assignment Started...\n");
-                char temp[25];
-                strcpy(temp, currToken);
                 scan();
-                scan();
-                listAdd();
+                if(tokenType == num && commands[commandsInd] != '\n') {
+                    expr();
+                    listAdd();
+                }
+                else if(tokenType == num)
+                    listAdd();
+                else{
+                    printf("%s","Non Numeric given during assignment\n");
+                    error();
+                }
             }
             else error();
         case read:
             printf("%s","Read Started...\n");
             scan();
-            if(inList(currToken) == 1){
+            if(inList() == 1){
                 printf("%s", "Read has been called on a pre-existing variable");
                 exit(2);
             }
             listAdd();
+            printf("%s", "Read successfully completed");
         case write:
             printf("%s","Write Started...\n");
             scan();
             printf("%f", expr());
+            printf("%s", "Write successfully completed");
         default: error();
     }
 }
 
 double expr(){
-    term();
+    double evalExpr = 0;
+    if()
+}
+
+/*
+ * term();
     scan();
     if(tokenType == eof){
         printf("%s", "stmt_list complete");
         return finalValue ;
     }
     term_tail();
-}
+    */
 
 double term_tail(){
     double temp = 0;
